@@ -51,7 +51,11 @@ async function promiseAllInBatches(subtreeSplits: subtreeSplit[], batchSize: num
     }
 }
 
-
+async function testHandler(tag: string) {
+    return async (split: subtreeSplit) => {
+        core.info(split.name + ' -> ' + tag);
+    };
+}
 
 
 (async () => {
@@ -151,11 +155,7 @@ async function promiseAllInBatches(subtreeSplits: subtreeSplit[], batchSize: num
         let tag = String(inputs.tag);
         core.info('Selected tag: '+tag);
 
-        function testHandler(tag: string) {
-            return (split: subtreeSplit) => {
-                core.info(split.name + ' -> ' + tag);
-            };
-        }
+
 
 
 

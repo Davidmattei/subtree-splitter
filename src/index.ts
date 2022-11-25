@@ -1,7 +1,7 @@
 import * as core from '@actions/core';
 import * as github from '@actions/github';
 import { exec } from '@actions/exec';
-import { CreateEvent, DeleteEvent } from '@octokit/webhooks-types';
+import { CreateEvent, DeleteEvent, WorkflowDispatchEvent } from '@octokit/webhooks-types';
 import { configurationOptions, subtreeSplit } from './types';
 import { removeDir, dirExists, removeFile } from './helpers/fs';
 import { ensureRemoteExists, tagExists, publishSubSplit } from './helpers/git';
@@ -48,6 +48,24 @@ async function promiseAllInBatches(subtreeSplits: subtreeSplit[], batchSize: num
 
         await Promise.all(itemsForBatch.map(split => handler(split)));
         position += batchSize;
+    }
+}
+
+async function handlerCreateTag(tag: string) {
+    return async (split: subtreeSplit) => {
+        let hash = await getExecOutput(splitshPath, [`--prefix=${split.directory}`, `--origin=tags/${tag}`]);
+        let clonePath = `./.repositories/${split.name}/`;
+
+        fs.mkdirSync(clonePath, { recursive: true});
+
+        await exec('git', ['clone', split.target, '.'], { cwd: clonePath});
+
+        // TODO: smart tag skipping (skip patch releases where commit was previously tagged) minor and major releases should always get a tag
+
+        if (!await tagExists(tag, clonePath)) {
+            await exec('git', ['tag', '-a', tag, hash, '-m', `"Tag ${tag}"`], {cwd: clonePath});
+        }
+        await exec('git', ['push', '--tags'], { cwd: clonePath });
     }
 }
 
@@ -100,21 +118,7 @@ async function promiseAllInBatches(subtreeSplits: subtreeSplit[], batchSize: num
             return;
         }
 
-        await promiseAllInBatches(subtreeSplits, batchSize, async (split: subtreeSplit) => {
-            let hash = await getExecOutput(splitshPath, [`--prefix=${split.directory}`, `--origin=tags/${tag}`]);
-            let clonePath = `./.repositories/${split.name}/`;
-
-            fs.mkdirSync(clonePath, { recursive: true});
-
-            await exec('git', ['clone', split.target, '.'], { cwd: clonePath});
-
-            // TODO: smart tag skipping (skip patch releases where commit was previously tagged) minor and major releases should always get a tag
-
-            if (!await tagExists(tag, clonePath)) {
-                await exec('git', ['tag', '-a', tag, hash, '-m', `"Tag ${tag}"`], {cwd: clonePath});
-            }
-            await exec('git', ['push', '--tags'], { cwd: clonePath });
-        });
+        await promiseAllInBatches(subtreeSplits, batchSize, handlerCreateTag(tag));
     } else if (context.eventName === 'delete') {
         // Tag removed
         let event = context.payload as DeleteEvent;
@@ -137,9 +141,16 @@ async function promiseAllInBatches(subtreeSplits: subtreeSplit[], batchSize: num
             }
         });
     } else if (context.eventName === 'workflow_dispatch') {
+        let event = context.payload as WorkflowDispatchEvent;
+        let inputs = event.inputs;
 
-        core.info('Dispatching workflow!');
+        if (null === inputs || !inputs.hasOwnProperty('tag')) {
+            core.info('No tag input provided, skipping...');
+            return;
+        }
 
+        let tag = String(inputs.tag);
+        await promiseAllInBatches(subtreeSplits, batchSize, handlerCreateTag(tag));
     }
 })().catch(error => {
     core.setFailed(error);

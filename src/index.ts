@@ -150,7 +150,7 @@ async function handlerCreateTag(tag: string) {
         }
 
         let tag = String(inputs.tag);
-        await promiseAllInBatches(subtreeSplits, batchSize, handlerCreateTag(tag));
+        //await promiseAllInBatches(subtreeSplits, batchSize, handlerCreateTag(tag));
     }
 })().catch(error => {
     core.setFailed(error);

@@ -51,9 +51,8 @@ async function promiseAllInBatches(subtreeSplits: subtreeSplit[], batchSize: num
     }
 }
 
-async function handlerCreateTag(tag: string) {
-    return
-}
+
+
 
 (async () => {
     const context = github.context;
@@ -152,13 +151,11 @@ async function handlerCreateTag(tag: string) {
         let tag = String(inputs.tag);
         core.info('Selected tag: '+tag);
 
-        async function testHandler(tag: string) {
-            return (split: subtreeSplit) => {
-                core.info(split.name + ' -> ' + tag);
-            }
-        }
 
-        let handler = testHandler(tag);
+
+        let handler = (split: subtreeSplit) => {
+            core.info(split.name + ' -> ' + tag);
+        };
 
         await promiseAllInBatches(subtreeSplits, batchSize, handler);
     }

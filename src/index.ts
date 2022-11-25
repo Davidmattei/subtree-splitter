@@ -136,6 +136,10 @@ async function promiseAllInBatches(subtreeSplits: subtreeSplit[], batchSize: num
                 await exec('git', ['push', '--delete', 'origin', tag], { cwd: clonePath});
             }
         });
+    } else if (context.eventName === 'workflow_dispatch') {
+
+        core.info('Dispatching workflow!');
+
     }
 })().catch(error => {
     core.setFailed(error);

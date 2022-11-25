@@ -152,9 +152,13 @@ async function handlerCreateTag(tag: string) {
         let tag = String(inputs.tag);
         core.info('Selected tag: '+tag);
 
-        let handler = async (split: subtreeSplit) => {
-            core.info(split.name);
+        async function testHandler(tag: string) {
+            return (split: subtreeSplit) => {
+                core.info(split.name + ' -> ' + tag);
+            }
         }
+
+        let handler = testHandler(tag);
 
         await promiseAllInBatches(subtreeSplits, batchSize, handler);
     }

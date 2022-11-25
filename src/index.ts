@@ -52,21 +52,7 @@ async function promiseAllInBatches(subtreeSplits: subtreeSplit[], batchSize: num
 }
 
 async function handlerCreateTag(tag: string) {
-    return async (split: subtreeSplit) => {
-        let hash = await getExecOutput(splitshPath, [`--prefix=${split.directory}`, `--origin=tags/${tag}`]);
-        let clonePath = `./.repositories/${split.name}/`;
-
-        fs.mkdirSync(clonePath, { recursive: true});
-
-        await exec('git', ['clone', split.target, '.'], { cwd: clonePath});
-
-        // TODO: smart tag skipping (skip patch releases where commit was previously tagged) minor and major releases should always get a tag
-
-        if (!await tagExists(tag, clonePath)) {
-            await exec('git', ['tag', '-a', tag, hash, '-m', `"Tag ${tag}"`], {cwd: clonePath});
-        }
-        await exec('git', ['push', '--tags'], { cwd: clonePath });
-    }
+    return
 }
 
 (async () => {
@@ -118,7 +104,21 @@ async function handlerCreateTag(tag: string) {
             return;
         }
 
-        await promiseAllInBatches(subtreeSplits, batchSize, handlerCreateTag(tag));
+        await promiseAllInBatches(subtreeSplits, batchSize, async (split: subtreeSplit) => {
+            let hash = await getExecOutput(splitshPath, [`--prefix=${split.directory}`, `--origin=tags/${tag}`]);
+            let clonePath = `./.repositories/${split.name}/`;
+
+            fs.mkdirSync(clonePath, { recursive: true});
+
+            await exec('git', ['clone', split.target, '.'], { cwd: clonePath});
+
+            // TODO: smart tag skipping (skip patch releases where commit was previously tagged) minor and major releases should always get a tag
+
+            if (!await tagExists(tag, clonePath)) {
+                await exec('git', ['tag', '-a', tag, hash, '-m', `"Tag ${tag}"`], {cwd: clonePath});
+            }
+            await exec('git', ['push', '--tags'], { cwd: clonePath });
+        });
     } else if (context.eventName === 'delete') {
         // Tag removed
         let event = context.payload as DeleteEvent;
@@ -152,8 +152,11 @@ async function handlerCreateTag(tag: string) {
         let tag = String(inputs.tag);
         core.info('Selected tag: '+tag);
 
+        let handler = async (split: subtreeSplit) => {
+            core.info(split.name);
+        }
 
-        //await promiseAllInBatches(subtreeSplits, batchSize, handlerCreateTag(tag));
+        await promiseAllInBatches(subtreeSplits, batchSize, handler);
     }
 })().catch(error => {
     core.setFailed(error);

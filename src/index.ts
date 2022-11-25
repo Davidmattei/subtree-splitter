@@ -151,13 +151,15 @@ async function promiseAllInBatches(subtreeSplits: subtreeSplit[], batchSize: num
         let tag = String(inputs.tag);
         core.info('Selected tag: '+tag);
 
+        function testHandler(tag: string) {
+            return (split: subtreeSplit) => {
+                core.info(split.name + ' -> ' + tag);
+            };
+        }
 
 
-        let handler = (split: subtreeSplit) => {
-            core.info(split.name + ' -> ' + tag);
-        };
 
-        await promiseAllInBatches(subtreeSplits, batchSize, handler);
+        await promiseAllInBatches(subtreeSplits, batchSize, testHandler(tag));
     }
 })().catch(error => {
     core.setFailed(error);

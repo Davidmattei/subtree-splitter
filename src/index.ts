@@ -51,6 +51,24 @@ async function promiseAllInBatches(subtreeSplits: subtreeSplit[], batchSize: num
     }
 }
 
+async function createTag(tag: string, subtreeSplits: subtreeSplit[], batchSize: number) {
+    await promiseAllInBatches(subtreeSplits, batchSize, async (split: subtreeSplit) => {
+        let hash = await getExecOutput(splitshPath, [`--prefix=${split.directory}`, `--origin=tags/${tag}`]);
+        let clonePath = `./.repositories/${split.name}/`;
+
+        fs.mkdirSync(clonePath, { recursive: true});
+
+        await exec('git', ['clone', split.target, '.'], { cwd: clonePath});
+
+        // TODO: smart tag skipping (skip patch releases where commit was previously tagged) minor and major releases should always get a tag
+
+        if (!await tagExists(tag, clonePath)) {
+            await exec('git', ['tag', '-a', tag, hash, '-m', `"Tag ${tag}"`], {cwd: clonePath});
+        }
+        await exec('git', ['push', '--tags'], { cwd: clonePath });
+    });
+}
+
 
 
 
@@ -103,21 +121,7 @@ async function promiseAllInBatches(subtreeSplits: subtreeSplit[], batchSize: num
             return;
         }
 
-        await promiseAllInBatches(subtreeSplits, batchSize, async (split: subtreeSplit) => {
-            let hash = await getExecOutput(splitshPath, [`--prefix=${split.directory}`, `--origin=tags/${tag}`]);
-            let clonePath = `./.repositories/${split.name}/`;
-
-            fs.mkdirSync(clonePath, { recursive: true});
-
-            await exec('git', ['clone', split.target, '.'], { cwd: clonePath});
-
-            // TODO: smart tag skipping (skip patch releases where commit was previously tagged) minor and major releases should always get a tag
-
-            if (!await tagExists(tag, clonePath)) {
-                await exec('git', ['tag', '-a', tag, hash, '-m', `"Tag ${tag}"`], {cwd: clonePath});
-            }
-            await exec('git', ['push', '--tags'], { cwd: clonePath });
-        });
+        await createTag(tag, subtreeSplits, batchSize);
     } else if (context.eventName === 'delete') {
         // Tag removed
         let event = context.payload as DeleteEvent;
@@ -151,15 +155,7 @@ async function promiseAllInBatches(subtreeSplits: subtreeSplit[], batchSize: num
         let tag = String(inputs.tag);
         core.info('Selected tag: '+tag);
 
-        function testHandler(tag: string) {
-            return (split: subtreeSplit) => {
-                core.info(split.name + ' -> ' + tag);
-            };
-        }
-
-
-
-        await promiseAllInBatches(subtreeSplits, batchSize, testHandler(tag));
+        await createTag(tag, subtreeSplits, batchSize);
     }
 })().catch(error => {
     core.setFailed(error);
